@@ -8,6 +8,7 @@ _*
 vectors.S
 bootblock
 entryother
+.gdbinit
 initcode
 initcode.out
 kernelmemfs
@@ -20,3 +21,4 @@ myapi.key
 xv6.out*
 .vagrant/
 submissions/
+.vscode/
