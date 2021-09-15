@@ -95,3 +95,14 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_trace(void)
+{
+  // 设置trace掩码
+  int traceMask;
+
+  if(argint(0, &traceMask) < 0)
+    return -1;
+  return trace(traceMask);
+}
