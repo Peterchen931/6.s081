@@ -26,8 +26,8 @@ struct {
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  initlock(&kmem.lock, "kmem"); // 初始化锁
+  freerange(end, (void*)PHYSTOP); // 初始化free链表
 }
 
 void
@@ -35,6 +35,7 @@ freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
+  // 逐页调用kfree
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     kfree(p);
 }
@@ -52,6 +53,7 @@ kfree(void *pa)
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
+  // 内存至1，挂到free链表中
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
@@ -71,6 +73,7 @@ kalloc(void)
   struct run *r;
 
   acquire(&kmem.lock);
+  // 分配一个kmem中的页
   r = kmem.freelist;
   if(r)
     kmem.freelist = r->next;
@@ -79,4 +82,22 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+// 计算可用空间，目前使用简单遍历进行计算
+// 可以使用一个页计数变量来加速
+uint64 
+kfreememory(void){
+  struct run *r;
+  uint32 freeMem = 0;
+
+  acquire(&kmem.lock);
+  r = kmem.freelist;
+  while(r){
+    freeMem += PGSIZE;
+    r = r->next;
+  }
+  release(&kmem.lock);
+
+  return freeMem;
 }

@@ -8,6 +8,7 @@ _*
 vectors.S
 bootblock
 entryother
+.gdbinit
 initcode
 initcode.out
 kernelmemfs

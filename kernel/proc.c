@@ -702,3 +702,28 @@ trace(int mask){
   myproc()->traceMask = mask;
   return 0;
 }
+
+// 统计所用正在运行的proc
+uint64 procCnt(void){
+  int cnt = 0;
+  for(int i = 0; i < NPROC; i++){
+    if(proc[i].state != UNUSED){
+      cnt++;
+    }
+  }
+  return cnt;
+}
+
+int 
+sysinfo(uint64 addr){
+  struct sysinfo info;
+  struct proc *p = myproc();
+
+  info.nproc = procCnt();
+  info.freemem = kfreememory();
+  
+  if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0){
+    return -1;
+  }
+  return 0;
+}
