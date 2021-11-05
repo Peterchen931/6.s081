@@ -30,6 +30,7 @@ kinit()
   freerange(end, (void*)PHYSTOP);
 }
 
+// 这里的freerange初始化的是物理地址
 void
 freerange(void *pa_start, void *pa_end)
 {

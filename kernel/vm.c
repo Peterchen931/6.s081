@@ -76,11 +76,13 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)];
-    if(*pte & PTE_V) {
+    if(*pte & PTE_V) {  // 如果该pte有分配，则进行迭代查询，逐个level查询
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
-      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
+      // // alloc等于0代表不分配，alloc不为0则尝试分配一个物理页来作为次级页表，kalloc返回0代表物理空间不够
+      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0) 
         return 0;
+      // 重置内存，并将设置ppn为刚分配的次级页表
       memset(pagetable, 0, PGSIZE);
       *pte = PA2PTE(pagetable) | PTE_V;
     }
@@ -439,4 +441,46 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void print_indent(int level){
+  switch (level)
+  {
+  case 2:
+    printf("..");
+    break;
+  case 1:
+    printf(".. ..");
+    break;
+  case 0:
+    printf(".. .. ..");
+    break;
+  default:
+    break;
+  }
+}
+
+void _vmprint(pagetable_t pagetable, int level)
+{
+  if(level == -1){
+    return;
+  }
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if( !(pte & PTE_V) )
+      continue;
+
+    uint64 childPg = PTE2PA(pte);
+    print_indent(level);
+    printf("%d: pte %p pa %p\n", i, pte, childPg);
+    _vmprint((pagetable_t)childPg, level-1);
+    
+  }
+}
+
+void 
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  _vmprint(pagetable, 2);
 }
