@@ -47,6 +47,37 @@ kvminit()
   kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 }
 
+pagetable_t
+process_kvminit()
+{
+  pagetable_t kpagetable = (pagetable_t) kalloc();
+  if(kpagetable == 0){
+    panic("kalloc");
+  }
+  memset(kpagetable, 0, PGSIZE);
+
+  // uart registers
+  mappages(kpagetable, UART0, PGSIZE, UART0, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  mappages(kpagetable, VIRTIO0, PGSIZE, VIRTIO0, PTE_R | PTE_W);
+
+  // PLIC
+  mappages(kpagetable, PLIC, 0x400000, PLIC, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  mappages(kpagetable, KERNBASE, (uint64)etext-KERNBASE, KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  mappages(kpagetable, (uint64)etext, PHYSTOP-(uint64)etext, (uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  mappages(kpagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X);
+  
+  return kpagetable;
+}
+
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
 void
@@ -123,6 +154,13 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
     panic("kvmmap");
 }
 
+// 卸载内核的映射
+void
+kvmunmap(uint64 va, uint64 npages, int do_free)
+{
+  unmappages(kernel_pagetable, va, npages, do_free);
+}
+
 // translate a kernel virtual address to
 // a physical address. only needed for
 // addresses on the stack.
@@ -169,11 +207,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
-// Remove npages of mappings starting from va. va must be
-// page-aligned. The mappings must exist.
-// Optionally free the physical memory.
 void
-uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+unmappages(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
   uint64 a;
   pte_t *pte;
@@ -194,6 +229,15 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     }
     *pte = 0;
   }
+}
+
+// Remove npages of mappings starting from va. va must be
+// page-aligned. The mappings must exist.
+// Optionally free the physical memory.
+void
+uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+{
+  unmappages(pagetable, va, npages, do_free);
 }
 
 // create an empty user page table.
@@ -286,6 +330,23 @@ freewalk(pagetable_t pagetable)
       pagetable[i] = 0;
     } else if(pte & PTE_V){
       panic("freewalk: leaf");
+    }
+  }
+  kfree((void*)pagetable);
+}
+
+// 删除pagetable，不要其下物理页全部释放
+void
+freewalk_ignore_leaf(pagetable_t pagetable)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      freewalk((pagetable_t)child);
+      pagetable[i] = 0;
     }
   }
   kfree((void*)pagetable);

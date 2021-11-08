@@ -30,7 +30,8 @@ procinit(void)
   initlock(&pid_lock, "nextpid");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
-
+      // 需要对每一个process分配kpagetable，同时将内存映射到kpagetable与kernel_pagetable上
+      p->kpagetable = process_kvminit();
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
@@ -38,8 +39,10 @@ procinit(void)
       if(pa == 0)
         panic("kalloc");
       uint64 va = KSTACK((int) (p - proc));
+      // 映射kstack
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      mappages(p->kpagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W);
+      p->kstack = va; 
   }
   kvminithart();
 }
@@ -473,6 +476,8 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        w_satp(MAKE_SATP(p->kpagetable));
+        sfence_vma();
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
