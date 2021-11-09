@@ -2390,6 +2390,8 @@ sbrkbugs(char *s)
     printf("fork failed\n");
     exit(1);
   }
+  // printf("fdffdffff");
+  // sleep(20);
   if(pid == 0){
     int sz = (uint64) sbrk(0);
     // free all user memory; there used to be a bug that
@@ -2649,11 +2651,13 @@ main(int argc, char *argv[])
     {truncate3, "truncate3"},
     {reparent2, "reparent2"},
     {pgbug, "pgbug" },
+
     {sbrkbugs, "sbrkbugs" },
-    // {badwrite, "badwrite" },
+    {badwrite, "badwrite" },
     {badarg, "badarg" },
     {reparent, "reparent" },
     {twochildren, "twochildren"},
+
     {forkfork, "forkfork"},
     {forkforkfork, "forkforkfork"},
     {argptest, "argptest"},

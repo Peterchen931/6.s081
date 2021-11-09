@@ -136,6 +136,7 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
+// 需要释放trapframe以及upagetable和kpagetable
 static void
 freeproc(struct proc *p)
 {
@@ -144,6 +145,7 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  proc_freekpagetable(p->kpagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -157,6 +159,7 @@ freeproc(struct proc *p)
 
 // Create a user page table for a given process,
 // with no user memory, but with trampoline pages.
+// 分配进程的用户空间页表，需要映射trampoline与trampframe部分
 pagetable_t
 proc_pagetable(struct proc *p)
 {
@@ -173,7 +176,8 @@ proc_pagetable(struct proc *p)
   // to/from user space, so not PTE_U.
   if(mappages(pagetable, TRAMPOLINE, PGSIZE,
               (uint64)trampoline, PTE_R | PTE_X) < 0){
-    uvmfree(pagetable, 0);
+    uvmfree_pagetable(pagetable, 0);
+    uvmfree_kpagetable(p->kpagetable, 0);
     return 0;
   }
 
@@ -181,7 +185,8 @@ proc_pagetable(struct proc *p)
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-    uvmfree(pagetable, 0);
+    uvmfree_pagetable(pagetable, 0);
+    uvmfree_kpagetable(p->kpagetable, 0);
     return 0;
   }
 
@@ -190,12 +195,19 @@ proc_pagetable(struct proc *p)
 
 // Free a process's page table, and free the
 // physical memory it refers to.
+// 做3件事，解除trampoline与trapframe的映射，用户空间的pagetable
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
-  uvmfree(pagetable, sz);
+  uvmfree_pagetable(pagetable, sz);
+}
+
+// 释放内核页表中用户空间部分
+void
+proc_freekpagetable(pagetable_t kpagetable, uint64 sz){
+  uvmfree_kpagetable(kpagetable, sz);
 }
 
 // a user program that calls exec("/init")
@@ -221,7 +233,7 @@ userinit(void)
   
   // allocate one user page and copy init's instructions
   // and data into it.
-  uvminit(p->pagetable, initcode, sizeof(initcode));
+  uvminit(p->pagetable, p->kpagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
@@ -246,11 +258,11 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+    if((sz = uvmalloc(p->pagetable, p->kpagetable, sz, sz + n)) == 0) {
       return -1;
     }
   } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    sz = uvmdealloc(p->pagetable, p->kpagetable, sz, sz + n);
   }
   p->sz = sz;
   return 0;
@@ -271,7 +283,7 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if(uvmcopy(p->pagetable, np->pagetable, np->kpagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;

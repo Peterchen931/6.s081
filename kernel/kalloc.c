@@ -81,3 +81,15 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+void print_remain_pages(){
+  struct run *r = kmem.freelist;
+  int cnt = 0;
+  acquire(&kmem.lock);
+  while(r){
+    cnt++;
+    r = r->next;
+  }
+  release(&kmem.lock);
+  printf("remain %d pages\n", cnt);
+}
