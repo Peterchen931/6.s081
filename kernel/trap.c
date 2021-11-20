@@ -77,9 +77,13 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    if(p->tick_setup > 0 && (++p->tick_now == p->tick_setup)){  // 由时钟引起的中断，将此时cpu上运行的进程tick数加一
+      // 如果tick数达到设定标准，则调用alarm函数
+      call_alarm_handler();
+    }
     yield();
-
+  }
   usertrapret();
 }
 

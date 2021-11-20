@@ -127,6 +127,12 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // 初始化sigalarm参数
+  p->tick_setup = 0;
+  p->tick_now = 0;
+  p->alarm_handler = 0;
+  memset(&p->ret_trapframe, 0, sizeof(struct trapframe));
+
   return p;
 }
 
@@ -294,6 +300,11 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  // 此处看是否需要复制alarm
+  // np->alarm_handler = p->alarm_handler;
+  // np->tick_setup = p->tick_setup;
+  // np->tick_now = p->tick_now;
 
   release(&np->lock);
 
@@ -697,3 +708,47 @@ procdump(void)
     printf("\n");
   }
 }
+
+// 用于设置proc参数
+int 
+sigalarm(int tick, void (*handler)())
+{
+  struct proc *p = myproc();
+  p->tick_setup = tick;
+  p->alarm_handler = handler;
+  return 0;
+}
+
+void call_alarm_handler()
+{
+  struct proc *p = myproc();
+  uint64 offset = sizeof(void*) * (&p->trapframe->ra-&p->trapframe->kernel_satp);
+  // 将p->trapframe从ra开始的所有值移动至p->ret_trapframe
+  // 但是需要保留sp指向当前栈顶（以继续函数调用）
+  memmove(&p->ret_trapframe.ra, &p->trapframe->ra, sizeof(struct trapframe)-offset);
+  memset(&p->trapframe->ra, 0, sizeof(struct trapframe)-offset);
+  p->trapframe->sp = p->ret_trapframe.sp;
+  // 备份并修改epc的值，使调用usertrapret时返回alarm_handler
+  p->ret_trapframe.epc = p->trapframe->epc;
+  p->trapframe->epc = (uint64)p->alarm_handler;
+}
+
+void alarm_handler_return()
+{
+  struct proc *p = myproc();
+  uint64 offset = sizeof(void*) * (&p->trapframe->ra-&p->trapframe->kernel_satp);
+  memmove(&p->trapframe->ra, &p->ret_trapframe.ra, sizeof(struct trapframe)-offset);
+  memset(&p->ret_trapframe.ra, 0, sizeof(struct trapframe)-offset);
+  p->trapframe->epc = p->ret_trapframe.epc;
+}
+
+int 
+sigreturn(void)
+{
+  // 复位
+  struct proc *p = myproc();
+  p->tick_now = 0;
+  alarm_handler_return();
+  return 0;
+}
+

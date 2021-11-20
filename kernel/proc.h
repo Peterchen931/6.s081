@@ -103,4 +103,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  void (*alarm_handler)();        // alarm处理函数地址（在用户空间调用）
+  int tick_setup;                 // 设定的时间
+  int tick_now;                   // 当前的tick数量
+  struct trapframe ret_trapframe; // sigret使用的trapframe
 };
