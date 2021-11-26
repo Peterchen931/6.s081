@@ -1,0 +1,32 @@
+// .vscode
+// 使用vscode调试注意要注释掉gdbinit中的 target remote 127.0.0.1:26000
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "debug xv6",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/kernel/kernel",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "miDebuggerServerAddress": "localhost:26000",
+            "miDebuggerPath": "/usr/bin/gdb-multiarch",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "logging": {
+                // "engineLogging": true,
+                // "programOutput": true,
+            }
+        }
+    ]
+}
